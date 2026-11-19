@@ -1,0 +1,22 @@
+# 本地私有文件：实际服务器的配置、临时脚本
+_private/
+
+# 资产表 / 凭据（含密码，绝不能提交）
+*.xlsx
+*.xls
+*.xlsm
+servers*.csv
+inventory*.csv
+inventory*.json
+*.pem
+*.key
+id_rsa*
+.env
+
+# Python / 编辑器 / 系统
+__pycache__/
+*.pyc
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

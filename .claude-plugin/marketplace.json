@@ -1,0 +1,22 @@
+{
+  "name": "jenkins-lighthouse",
+  "owner": {
+    "name": "seaworld008",
+    "url": "https://github.com/seaworld008"
+  },
+  "metadata": {
+    "description": "A lighthouse for legacy Jenkins and nginx: agent skills for LTS upgrades and CVE fleet rollouts — gated, verifiable, rollbackable.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "jenkins-lighthouse",
+      "source": "./",
+      "description": "Upgrade legacy Jenkins to 2.580.x LTS (controller in Docker Compose, agents on the host) and patch nginx fleets for high-severity CVEs.",
+      "version": "0.1.0",
+      "license": "MIT",
+      "keywords": ["jenkins", "nginx", "upgrade", "cve", "devops"],
+      "category": "devops"
+    }
+  ]
+}

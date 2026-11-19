@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 🔒 安全问题 / Security issue
+    url: https://github.com/seaworld008/jenkins-lighthouse/security/advisories/new
+    about: 请私下报告，不要公开 issue / Report privately, not as a public issue
+  - name: 💬 讨论与求助 / Discussions & help
+    url: https://github.com/seaworld008/jenkins-lighthouse/discussions
+    about: 方案讨论、"我的 Jenkins 能不能直接跨大版本"之类的问题 / Planning questions

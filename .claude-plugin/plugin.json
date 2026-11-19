@@ -1,0 +1,13 @@
+{
+  "name": "jenkins-lighthouse",
+  "version": "0.1.0",
+  "description": "Safely upgrade legacy Jenkins (2.2xx-2.4xx on Java 8/11) to the current LTS (2.580.x, Java 21/25) with near-zero downtime, and batch-upgrade nginx fleets for high-severity CVEs (1.30.7 / 1.31.9) across containers, rpm, source builds, OpenResty and private-registry frontends — gated, verifiable, rollbackable.",
+  "author": {
+    "name": "seaworld008",
+    "url": "https://github.com/seaworld008"
+  },
+  "homepage": "https://github.com/seaworld008/jenkins-lighthouse",
+  "repository": "https://github.com/seaworld008/jenkins-lighthouse",
+  "license": "MIT",
+  "keywords": ["jenkins", "jenkins-lts", "upgrade", "docker-compose", "nginx", "cve", "harbor", "kubernetes", "devops", "agent-skills"]
+}

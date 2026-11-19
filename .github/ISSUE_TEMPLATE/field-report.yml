@@ -1,0 +1,52 @@
+name: "📋 实战报告 / Case report"
+description: 分享一次真实升级（成功、失败、回滚都欢迎）/ Share a real upgrade run — success, failure or rollback
+title: "report: <cloud> <topic> <source> → <target>"
+labels: [case-report]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        更推荐直接提 PR：按 `case-studies/TEMPLATE.md` 新增 `case-studies/YYYY-MM-DD-<topic>.md`。如果不方便提 PR，在下面贴报告内容。**请务必脱敏。**
+        Prefer a PR adding a file from `case-studies/TEMPLATE.md`. Otherwise paste it below. **Sanitize everything.**
+  - type: dropdown
+    id: topic
+    attributes:
+      label: 领域 / Area
+      options: [jenkins-lts-upgrade, nginx-vuln-upgrade, both]
+    validations: { required: true }
+  - type: dropdown
+    id: cloud
+    attributes:
+      label: 云 / Cloud
+      options: [aliyun, huawei, aws, other / on-prem]
+    validations: { required: true }
+  - type: input
+    id: path
+    attributes:
+      label: 升级路径 / Path
+      placeholder: "Jenkins 2.275 → 2.580.2 LTS；nginx 1.18.0 → 1.30.7"
+    validations: { required: true }
+  - type: dropdown
+    id: result
+    attributes:
+      label: 结果 / Result
+      options: [success, partial, rolled-back, aborted]
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes:
+      label: 技能版本 / Skill version
+      placeholder: "0.1.0"
+  - type: textarea
+    id: report
+    attributes:
+      label: 报告 / Report (TEMPLATE.md sections)
+      description: 机器画像、决定、时间线、遇到的问题（现象/原因/处理）、基线对比、技能不足
+    validations: { required: true }
+  - type: checkboxes
+    id: sanitized
+    attributes:
+      label: 确认 / Confirm
+      options:
+        - label: 我已脱敏 / Sanitized (no real IPs, domains, hostnames, credentials, company names, job names)
+          required: true

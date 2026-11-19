@@ -1,0 +1,9 @@
+# 脚本要上传到 Linux 执行：无论在哪个系统检出都保持 LF，否则 bash 报 $'\r': command not found
+* text=auto eol=lf
+*.sh  text eol=lf
+*.py  text eol=lf
+*.md  text eol=lf
+*.groovy text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+*.tmpl text eol=lf
