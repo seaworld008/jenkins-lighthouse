@@ -1,0 +1,48 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<project>
+  <description>demo freestyle job (sanitized fixture)</description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <hudson.model.ParametersDefinitionProperty>
+      <parameterDefinitions>
+        <hudson.model.StringParameterDefinition>
+          <name>JENKINS_IMAGE_TAG</name>
+          <defaultValue>20261119</defaultValue>
+        </hudson.model.StringParameterDefinition>
+      </parameterDefinitions>
+    </hudson.model.ParametersDefinitionProperty>
+  </properties>
+  <scm class="hudson.plugins.git.GitSCM" plugin="git">
+    <userRemoteConfigs>
+      <hudson.plugins.git.UserRemoteConfig>
+        <url>https://gitlab.example.com/group/demo-app.git</url>
+      </hudson.plugins.git.UserRemoteConfig>
+    </userRemoteConfigs>
+    <branches>
+      <hudson.plugins.git.BranchSpec>
+        <name>*/main</name>
+      </hudson.plugins.git.BranchSpec>
+    </branches>
+  </scm>
+  <assignedNode>build-agent</assignedNode>
+  <jdk>java</jdk>
+  <triggers/>
+  <disabled>false</disabled>
+  <builders>
+    <hudson.tasks.Shell>
+      <command>source /etc/profile
+set -e
+mvn -B clean package -DskipTests
+IMAGE=registry.example.com/library/demo-app:$JENKINS_IMAGE_TAG
+cat &lt;&lt;EOF &gt; Dockerfile
+FROM registry.example.com/library/base-nginx:1.25
+COPY dist/ /usr/share/nginx/html/
+EOF
+docker pull registry.example.com/library/base-nginx:1.25
+docker build -t "$IMAGE" .
+docker push "$IMAGE"
+ssh -l deploy 192.0.2.10 "cd /data/app &amp;&amp; ./restart.sh"
+rsync -a target/app.jar 198.51.100.20:/data/backup/</command>
+    </hudson.tasks.Shell>
+  </builders>
+</project>
