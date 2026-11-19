@@ -13,6 +13,9 @@ inventory*.json
 id_rsa*
 .env
 
+# 例外：技能自带的示例 inventory（文档 IP 段）
+!skills/nginx-vuln-upgrade/scripts/inventory.example.json
+
 # Python / 编辑器 / 系统
 __pycache__/
 *.pyc
