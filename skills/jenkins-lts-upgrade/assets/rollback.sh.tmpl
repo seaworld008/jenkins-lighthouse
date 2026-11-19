@@ -1,0 +1,59 @@
+#!/bin/bash
+# rollback.sh.tmpl - 回滚脚本模板：新控制器 → 旧 Jenkins
+# 前提：切换时旧 unit/旧 war/旧 JDK/旧 HOME 都原样保留（见 references/rollback.md）。
+# 替换以下占位符（不带尖括号）后使用。每步打时间戳；任何一步失败立即停。切换前必须在演练环境跑通过本脚本。
+set -euo pipefail
+export LC_ALL=C
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+STAMP() { echo "[$(date '+%F %T')] $*"; }
+DATE=$(date +%Y%m%d)
+AGENT_UNIT=AGENT_UNIT_PLACEHOLDER                 # agent 的 unit，如 jenkins-agent.service
+COMPOSE_DIR=COMPOSE_DIR_PLACEHOLDER               # compose 所在目录，如 /data/jenkins
+OLD_UNIT=OLD_UNIT_PLACEHOLDER                     # 旧服务 unit，如 jenkins.service
+OLD_HOME_RENAMED=OLD_HOME_RENAMED_PLACEHOLDER     # 切换时改名的旧 HOME，如 /var/lib/jenkins.pre-upgrade-YYYYMMDD
+NEW_HOME_DIR=NEW_HOME_DIR_PLACEHOLDER             # 数据盘上的新 home 目录（bind mount 的源）
+BIND_MOUNT=BIND_MOUNT_PLACEHOLDER                  # 切换时的 bind mount，格式 源:旧JENKINS_HOME
+FSTAB=/etc/fstab
+LOG=LOG_PLACEHOLDER/rollback-$DATE.log            # 切换日志目录
+
+STAMP "===== 回滚开始 ====="
+exec > >(tee -a "$LOG") 2>&1
+
+# 1) 停新控制器与 agent（队列会跨重启保留，回到旧环境前确认没有要保留的记录）
+STAMP "1. 停 agent 和新控制器"
+systemctl stop "$AGENT_UNIT" 2>/dev/null || true
+(cd "$COMPOSE_DIR" && docker compose down) || true
+
+# 2) 还原挂载：如果切换时做了 bind mount（数据盘 home -> 旧路径），先去掉
+STAMP "2. 还原挂载"
+MNT_SRC=${BIND_MOUNT%%:*}
+MNT=${BIND_MOUNT#*:}
+if mountpoint -q "$MNT" 2>/dev/null; then
+  cp -a "$FSTAB" "$FSTAB.bak-rollback-$DATE"
+  umount "$MNT"
+  sed -i "\#^${MNT_SRC}[[:space:]]#d" "$FSTAB"   # 删掉 fstab 里的 bind mount 行
+  STAMP "已卸载 bind mount 并备份 fstab"
+fi
+
+# 3) 恢复旧 HOME
+STAMP "3. 恢复旧 HOME"
+OLD_HOME=${BIND_MOUNT#*:}
+[ -d "$OLD_HOME" ] && mv "$OLD_HOME" "${OLD_HOME}.abandoned-rollback-$DATE"   # 新 home 改名保留，不删
+mv "$OLD_HOME_RENAMED" "$OLD_HOME"
+
+# 4) 启动旧服务并校验
+STAMP "4. 启动旧服务 $OLD_UNIT"
+systemctl enable "$OLD_UNIT" 2>/dev/null || true
+systemctl start "$OLD_UNIT"
+for i in $(seq 1 30); do
+  sleep 5
+  curl -fsS -o /dev/null "http://127.0.0.1:8080/login" && { STAMP "旧服务 /login 返回 200"; break; }
+  [ "$i" = 30 ] && { STAMP "FATAL: 旧服务 150 秒内没就绪，人工介入"; exit 1; }
+done
+
+# 5) 校验
+STAMP "5. 校验"
+systemctl is-active "$OLD_UNIT"
+grep -oE '<version>[^<]+' "$OLD_HOME/config.xml" | head -1
+STAMP "回滚完成。切换后产生的构建记录和配置修改不会自动回到旧环境（rollback.md 的代价一节）"

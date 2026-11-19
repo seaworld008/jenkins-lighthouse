@@ -1,0 +1,30 @@
+<?xml version='1.1' encoding='UTF-8'?>
+<flow-definition plugin="workflow-job">
+  <description>demo pipeline job (sanitized fixture)</description>
+  <keepDependencies>false</keepDependencies>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps">
+    <script>node('build-agent') {
+  stage('build') {
+    sh '''
+source /etc/profile
+mvn -B clean package
+    '''
+  }
+  stage('image') {
+    sh '''
+      IMAGE=registry.example.com/library/demo-pipeline:${BUILD_ID}
+      cat &lt;&lt;EOF &gt; Dockerfile.tmp
+      FROM registry.example.com/library/base-openjdk8:latest
+      COPY app.jar /app.jar
+EOF
+      docker pull registry.example.com/library/base-openjdk8:latest
+      docker build -f Dockerfile.tmp -t "$IMAGE" .
+      docker push "$IMAGE"
+    '''
+  }
+}</script>
+    <sandbox>true</sandbox>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>

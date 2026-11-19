@@ -1,0 +1,5 @@
+{
+  "server01": {"host": "192.0.2.10", "port": 22, "user": "root"},
+  "server02": {"host": "192.0.2.11", "port": 22, "user": "root"},
+  "server03": {"host": "198.51.100.20", "port": 10022, "user": "deploy"}
+}

@@ -1,0 +1,41 @@
+# jenkins-agent.service.tmpl - 宿主机 Jenkins agent 的 systemd unit
+# 安装: 复制为 /etc/systemd/system/jenkins-agent.service，替换 <URL>/<SECRET>/<HOME>/<JAVA目录>/<运行账号>，
+#       systemctl daemon-reload && systemctl enable --now jenkins-agent
+# 设计要点（见 architecture.md）：
+#   - Java 用绝对路径启动 Remoting，不设 JAVA_HOME、不进 PATH —— 构建看到的 Java 由
+#     /etc/profile、alternatives、全局 JDK 工具决定。
+#   - 环境变量照抄旧 jenkins 服务的（PATH、HOME、LANG），让构建环境尽量不变。
+#   - WebSocket 连本机控制器，不需要对外开 50000 端口；secret 从文件读（0600），不写进 unit。
+#   - KillMode=process：只杀 java 主进程，避免 systemd 连环杀掉构建进程。
+# 方案 B（独立账号 + rootless Docker）时：改 User/Group，去掉 ProtectHome（会挡 rootless Docker
+#   的 socket，见 pitfalls B1），按 architecture.md 表格加 InaccessiblePaths= / BindReadOnlyPaths=。
+
+[Unit]
+Description=Jenkins host build agent
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 方案 A 用 root 同环境；方案 B 换成专用账号，如 jenkins-release
+User=root
+# 环境变量与旧 jenkins 服务保持一致（示例；按旧服务的 systemctl show -p Environment 抄）
+Environment=LANG=en_US.UTF-8
+Environment=PATH=/sbin:/usr/sbin:/bin:/usr/bin
+Environment=HOME=/root
+# 注意：不要设 JAVA_HOME；Java 用绝对路径
+ExecStart=<JAVA目录>/bin/java -jar <HOME>/agent/agent.jar \
+    -url http://127.0.0.1:8080/ \
+    -secret @<HOME>/agent/secret \
+    -name <agent节点名> \
+    -workDir <remoteFS，如 /var/lib/jenkins>
+KillMode=process
+Restart=always
+RestartSec=10
+# 方案 B 的沙箱示例（按需启用，见 architecture.md）：
+# InaccessiblePaths=/root /home <控制器数据目录>
+# BindReadOnlyPaths=/etc/profile:<调整过的profile副本路径>
+# LoadCredential=obs:/etc/jenkins-agent/obs.ini
+
+[Install]
+WantedBy=multi-user.target

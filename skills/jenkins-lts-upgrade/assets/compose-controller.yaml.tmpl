@@ -1,0 +1,36 @@
+# compose-controller.yaml.tmpl - Jenkins LTS 控制器（Docker Compose）
+# 模板变量：把 <JENKINS_HOME>（容器内路径，建议保持旧路径）、<数据盘上的home目录>、<镜像> 替换后使用。
+# 生产建议：先把官方镜像推到自己的私仓（固定标签），compose 引用私仓标签，便于校验与回滚。
+# 8080/50000 只绑 127.0.0.1：对外入口走反向代理；agent 用 WebSocket 连控制器，不需要 50000 对外。
+services:
+  jenkins-controller:
+    image: <镜像，如 registry.example.com/library/jenkins:2.580.2-lts-jdk25>
+    container_name: jenkins-controller
+    restart: unless-stopped
+    user: "0:0"                       # 方案 A（root 同环境）；加固时可改非 root，见 architecture.md
+    ports:
+      - "127.0.0.1:8080:8080"         # Web UI，经反代对外
+      - "127.0.0.1:50000:50000"       # JNLP agent 端口；agent 用 WebSocket 时可不暴露
+    environment:
+      - JENKINS_HOME=<JENKINS_HOME，容器内路径，如 /var/lib/jenkins>
+      - JAVA_OPTS=-Xmx3g -Duser.timezone=Asia/Shanghai -Dhudson.model.DirectoryBrowserSupport.CSP=
+      - TZ=Asia/Shanghai
+      - LANG=C.UTF-8
+    volumes:
+      # 数据盘上的 JENKINS_HOME；必要时 bind mount 回旧路径，写死路径的任务脚本照常可用
+      - <数据盘上的home目录>:<JENKINS_HOME>
+    # 启动保护：config.xml 不存在就拒绝启动，防止数据盘没挂载时初始化出一个空 Jenkins
+    entrypoint: ["/bin/sh", "-c",
+      "test -f <JENKINS_HOME>/config.xml || { echo 'FATAL: config.xml missing, refusing to start'; exit 1; };
+       exec /usr/local/bin/jenkins.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:8080/login || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 12
+      start_period: 180s
+    mem_limit: 4g
+    logging:
+      driver: json-file
+      options: { max-size: "50m", max-file: "5" }
+    # 不挂 /var/run/docker.sock；构建需要的 docker 由宿主机 agent 提供

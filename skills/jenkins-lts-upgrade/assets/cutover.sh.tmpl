@@ -1,0 +1,68 @@
+#!/bin/bash
+# cutover.sh.tmpl - 切换脚本模板：旧 Jenkins → Docker Compose 控制器 + 宿主机 agent
+# 前提：演练环境已完整跑过本脚本和 rollback.sh.tmpl；业务方已拍板窗口。
+# 替换以下占位符（不带尖括号）后使用；每一步都打时间戳。任何一步失败立即停（set -e）。
+# 只对会改系统状态的步骤动手：静默模式→队列排空检查→停旧服务→最后一次同步→启新控制器→起 agent。
+set -euo pipefail
+export LC_ALL=C
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+STAMP() { echo "[$(date '+%F %T')] $*"; }
+DATE=$(date +%Y%m%d)
+OLD_UNIT=OLD_UNIT_PLACEHOLDER                 # 旧服务 unit，如 jenkins.service
+OLD_HOME=OLD_HOME_PLACEHOLDER                # 旧 JENKINS_HOME，如 /var/lib/jenkins
+NEW_HOME_DIR=NEW_HOME_DIR_PLACEHOLDER        # 数据盘上的新 home 目录，如 /data/jenkins/home
+COMPOSE_DIR=COMPOSE_DIR_PLACEHOLDER           # compose 所在目录，如 /data/jenkins
+AGENT_UNIT=AGENT_UNIT_PLACEHOLDER            # agent 的 unit，如 jenkins-agent.service
+LOG=LOG_PLACEHOLDER/cutover-$DATE.log        # 切换日志目录
+
+STAMP "===== 切换开始（输出同时记入 $LOG）====="
+exec > >(tee -a "$LOG") 2>&1
+
+# 1) 旧控制器进静默模式（QuietDown：不再接收新构建）。需要人登录的页面操作提前完成。
+STAMP "1. 静默模式"
+curl -fsS -X POST --data "" "http://127.0.0.1:8080/quietDown" >/dev/null || \
+  { STAMP "FATAL: 静默模式失败"; exit 1; }
+
+# 2) 等队列和执行中排空（活跃构建按 builds 目录 mtime 判断更可靠，见 pitfalls G2）
+STAMP "2. 等待队列排空"
+for i in $(seq 1 60); do
+  # 兼容写法：构建数与队列数都为 0 才继续
+  BUILDING=$(curl -fsS "http://127.0.0.1:8080/api/json?tree=computer[executors[currentExecutable[url]]]" 2>/dev/null | grep -c 'url"' || true)
+  RECENT=$(find "$OLD_HOME/jobs" -maxdepth 3 -type d -name builds -newermt '-10 minutes' 2>/dev/null | wc -l)
+  if [ "${BUILDING:-1}" -eq 0 ] && [ "${RECENT:-1}" -eq 0 ]; then STAMP "队列已空（mtime 口径 $RECENT）"; break; fi
+  [ "$i" = 60 ] && { STAMP "FATAL: 10 分钟没排空，取消静默并退出"; curl -fsS -X POST --data "" "http://127.0.0.1:8080/cancelQuietDown" >/dev/null || true; exit 1; }
+  sleep 10
+done
+
+# 3) 停旧服务并取消开机启动（旧 war/旧 JDK/旧 HOME 都保留用于回滚）
+STAMP "3. 停旧服务 $OLD_UNIT"
+systemctl stop "$OLD_UNIT"
+systemctl disable "$OLD_UNIT" 2>/dev/null || true
+
+# 4) 最后一次 rsync（此前已做过主体同步；--delete 保持一致）
+STAMP "4. 最后一次同步 $OLD_HOME -> $NEW_HOME_DIR"
+rsync -a --delete --exclude 'workspace/' --exclude '*.log' "$OLD_HOME/" "$NEW_HOME_DIR/"
+OLD_HOME_RENAMED="${OLD_HOME}.pre-upgrade-$DATE"
+mv "$OLD_HOME" "$OLD_HOME_RENAMED"
+STAMP "旧 HOME 已改名 $OLD_HOME_RENAMED（回滚窗口内保留）"
+
+# 5) 启动新控制器（config.xml 存在性检查由 compose entrypoint 保证）
+STAMP "5. 启动新控制器"
+cd "$COMPOSE_DIR"
+docker compose up -d
+for i in $(seq 1 60); do
+  sleep 5
+  curl -fsS -o /dev/null "http://127.0.0.1:8080/login" && { STAMP "控制器 /login 返回 200"; break; }
+  [ "$i" = 60 ] && { STAMP "FATAL: 控制器 5 分钟没就绪，考虑回滚（rollback.sh.tmpl）"; exit 1; }
+done
+
+# 6) 启动宿主机 agent
+STAMP "6. 启动 agent $AGENT_UNIT"
+systemctl daemon-reload
+systemctl enable --now "$AGENT_UNIT"
+sleep 10
+systemctl is-active --quiet "$AGENT_UNIT" && STAMP "agent active" || { STAMP "FATAL: agent 没起来"; exit 1; }
+
+STAMP "===== 切换完成，开始验收（references/acceptance.md）====="
+STAMP "停服时长见上面第 3 步与第 5 步的时间差"
